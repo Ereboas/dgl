@@ -1,7 +1,7 @@
-/*!
+/**
  *  Copyright (c) 2020 by Contributors
- * \file array/kernel.cc
- * \brief New kernels
+ * @file array/kernel.cc
+ * @brief New kernels
  */
 #include <dgl/packed_func_ext.h>
 #include <dgl/base_heterograph.h>
@@ -23,7 +23,7 @@ namespace {
 
 }  // namespace
 
-/*! \brief Generalized Sparse Matrix-Matrix Multiplication. */
+/** @brief Generalized Sparse Matrix-Matrix Multiplication. */
 void SpMM(const std::string& op, const std::string& reduce,
           HeteroGraphPtr graph,
           NDArray ufeat,
@@ -36,13 +36,13 @@ void SpMM(const std::string& op, const std::string& reduce,
 
   ATEN_XPU_SWITCH_CUDA(graph->Context().device_type, XPU, "SpMM", {
     ATEN_ID_TYPE_SWITCH(graph->DataType(), IdType, {
-      ATEN_FLOAT_BITS_SWITCH(out->dtype, bits, "Feature data", {
+      ATEN_FLOAT_TYPE_SWITCH_16BITS(out->dtype, Dtype, XPU, "Feature data", {
         if (format == SparseFormat::kCSC) {
-          SpMMCsr<XPU, IdType, bits>(
+          SpMMCsr<XPU, IdType, Dtype>(
               op, reduce, bcast, graph->GetCSCMatrix(0),
               ufeat, efeat, out, out_aux);
         } else if (format == SparseFormat::kCOO) {
-          SpMMCoo<XPU, IdType, bits>(
+          SpMMCoo<XPU, IdType, Dtype>(
               op, reduce, bcast, graph->GetCOOMatrix(0),
               ufeat, efeat, out, out_aux);
         } else {
@@ -54,7 +54,7 @@ void SpMM(const std::string& op, const std::string& reduce,
 }
 
 
-/*! \brief Generalized segmented dense Matrix-Matrix Multiplication. */
+/** @brief Generalized segmented dense Matrix-Matrix Multiplication. */
 void SegmentMM(const NDArray A,
                const NDArray B,
                NDArray C,
@@ -76,8 +76,8 @@ void SegmentMM(const NDArray A,
   CHECK(A->ctx == B->ctx) << "segment_mm expects A and B to be of the same device";
   ATEN_XPU_SWITCH_CUDA(A->ctx.device_type, XPU, "SegmentMM", {
     ATEN_ID_TYPE_SWITCH(seglen_A->dtype, IdType, {
-      ATEN_FLOAT_BITS_SWITCH(A->dtype, bits, "Feature data", {
-        SegmentMM<XPU, IdType, bits>(A, B, C, seglen_A, A_trans, B_trans);
+      ATEN_FLOAT_TYPE_SWITCH_16BITS(A->dtype, Dtype, XPU, "Feature data", {
+        SegmentMM<XPU, IdType, Dtype>(A, B, C, seglen_A, A_trans, B_trans);
       });
     });
   });
@@ -94,15 +94,15 @@ void SegmentMMBackwardB(const NDArray A,
     << "segment_mm expects seglen to be on CPU.";
   ATEN_XPU_SWITCH_CUDA(A->ctx.device_type, XPU, "SegmentMMBackwardB", {
     ATEN_ID_TYPE_SWITCH(seglen->dtype, IdType, {
-      ATEN_FLOAT_BITS_SWITCH(A->dtype, bits, "Feature data", {
-        SegmentMMBackwardB<XPU, IdType, bits>(A, dC, dB, seglen);
+      ATEN_FLOAT_TYPE_SWITCH_16BITS(A->dtype, Dtype, XPU, "Feature data", {
+        SegmentMMBackwardB<XPU, IdType, Dtype>(A, dC, dB, seglen);
       });
     });
   });
 }
 
 
-/*! \brief Generalized Dense Matrix-Matrix Multiplication according to relation types. */
+/** @brief Generalized Dense Matrix-Matrix Multiplication according to relation types. */
 void GatherMM(const NDArray A,
               const NDArray B,
               NDArray C,
@@ -131,15 +131,15 @@ void GatherMM(const NDArray A,
   const auto idtype = aten::IsNullArray(idx_a)? idx_b->dtype : idx_a->dtype;
   ATEN_XPU_SWITCH_CUDA(A->ctx.device_type, XPU, "GatherMM", {
     ATEN_ID_TYPE_SWITCH(idtype, IdType, {
-      ATEN_FLOAT_BITS_SWITCH(A->dtype, bits, "Feature data", {
-        GatherMM<XPU, IdType, bits>(A, B, C, idx_a, idx_b);
+      ATEN_FLOAT_TYPE_SWITCH_16BITS(A->dtype, Dtype, XPU, "Feature data", {
+        GatherMM<XPU, IdType, Dtype>(A, B, C, idx_a, idx_b);
       });
     });
   });
 }
 
 
-/*! \brief Generalized Dense Matrix-Matrix Multiplication according to relation types. */
+/** @brief Generalized Dense Matrix-Matrix Multiplication according to relation types. */
 void GatherMMScatter(const NDArray A,
                      const NDArray B,
                      NDArray C,
@@ -171,15 +171,15 @@ void GatherMMScatter(const NDArray A,
   }
   ATEN_XPU_SWITCH_CUDA(A->ctx.device_type, XPU, "GatherMM", {
     ATEN_ID_TYPE_SWITCH(idx_c->dtype, IdType, {
-      ATEN_FLOAT_BITS_SWITCH(A->dtype, bits, "Feature data", {
-        GatherMMScatter<XPU, IdType, bits>(A, B, C, idx_a, idx_b, idx_c);
+      ATEN_FLOAT_TYPE_SWITCH_16BITS(A->dtype, Dtype, XPU, "Feature data", {
+        GatherMMScatter<XPU, IdType, Dtype>(A, B, C, idx_a, idx_b, idx_c);
       });
     });
   });
 }
 
 
-/*! \brief Generalized Sparse Matrix-Matrix Multiplication with hetero-graph support. */
+/** @brief Generalized Sparse Matrix-Matrix Multiplication with hetero-graph support. */
 void SpMMHetero(const std::string& op, const std::string& reduce,
           HeteroGraphPtr graph,
           const std::vector<NDArray>& ufeat_vec,
@@ -210,9 +210,9 @@ void SpMMHetero(const std::string& op, const std::string& reduce,
 
   ATEN_XPU_SWITCH_CUDA(graph->Context().device_type, XPU, "SpMM", {
     ATEN_ID_TYPE_SWITCH(graph->DataType(), IdType, {
-      ATEN_FLOAT_BITS_SWITCH((*out)[out_eid[0]]->dtype, bits, "Feature data", {
+      ATEN_FLOAT_TYPE_SWITCH_16BITS((*out)[out_eid[0]]->dtype, Dtype, XPU, "Feature data", {
         if (format == SparseFormat::kCSC) {
-          SpMMCsrHetero<XPU, IdType, bits>(
+          SpMMCsrHetero<XPU, IdType, Dtype>(
               op, reduce, bcast, vec_graph,
               ufeat_vec, efeat_vec, out, out_aux,
               ufeat_eid, out_eid);
@@ -227,7 +227,7 @@ void SpMMHetero(const std::string& op, const std::string& reduce,
 }
 
 
-/*! \brief Generalized Sampled Dense-Dense Matrix Multiplication. */
+/** @brief Generalized Sampled Dense-Dense Matrix Multiplication. */
 void SDDMM(const std::string& op,
            HeteroGraphPtr graph,
            NDArray lhs,
@@ -241,13 +241,13 @@ void SDDMM(const std::string& op,
 
   ATEN_XPU_SWITCH_CUDA(graph->Context().device_type, XPU, "SDDMM", {
     ATEN_ID_TYPE_SWITCH(graph->DataType(), IdType, {
-      ATEN_FLOAT_BITS_SWITCH(out->dtype, bits, "Feature data", {
+      ATEN_FLOAT_TYPE_SWITCH_16BITS(out->dtype, Dtype, XPU, "Feature data", {
         if (format == SparseFormat::kCSR) {
-          SDDMMCsr<XPU, IdType, bits>(
+          SDDMMCsr<XPU, IdType, Dtype>(
               op, bcast, graph->GetCSRMatrix(0),
               lhs, rhs, out, lhs_target, rhs_target);
         } else if (format == SparseFormat::kCOO) {
-          SDDMMCoo<XPU, IdType, bits>(
+          SDDMMCoo<XPU, IdType, Dtype>(
               op, bcast, graph->GetCOOMatrix(0),
               lhs, rhs, out, lhs_target, rhs_target);
         } else {
@@ -258,12 +258,12 @@ void SDDMM(const std::string& op,
   });
 }
 
-/*!
- * \brief Find the src/dst/etype id based on the target 'u', 'v' or 'e'.
+/**
+ * @brief Find the src/dst/etype id based on the target 'u', 'v' or 'e'.
  *
- * \param graph The input graph.
- * \param target 'u', 'v' or 'e'. The target of the lhs or rhs data of an etype.
- * \param etype Relation type of the input graph.
+ * @param graph The input graph.
+ * @param target 'u', 'v' or 'e'. The target of the lhs or rhs data of an etype.
+ * @param etype Relation type of the input graph.
  */
 int get_typeid_by_target(HeteroGraphPtr graph, int target, dgl_type_t etype) {
   auto pair = graph->meta_graph()->FindEdge(etype);
@@ -274,7 +274,7 @@ int get_typeid_by_target(HeteroGraphPtr graph, int target, dgl_type_t etype) {
   return etype;
 }
 
-/*! \brief Generalized Sampled Dense-Dense Matrix Multiplication. */
+/** @brief Generalized Sampled Dense-Dense Matrix Multiplication. */
 void SDDMMHetero(const std::string& op,
            HeteroGraphPtr graph,
            std::vector<NDArray> lhs,
@@ -294,13 +294,13 @@ void SDDMMHetero(const std::string& op,
 
   ATEN_XPU_SWITCH_CUDA(graph->Context().device_type, XPU, "SDDMM", {
     ATEN_ID_TYPE_SWITCH(graph->DataType(), IdType, {
-      ATEN_FLOAT_BITS_SWITCH(out[rhs_eid[0]]->dtype, bits, "Feature data", {
+      ATEN_FLOAT_TYPE_SWITCH_16BITS(out[rhs_eid[0]]->dtype, Dtype, XPU, "Feature data", {
         if (format == SparseFormat::kCSR) {
           std::vector<CSRMatrix> vec_csr;
           for (dgl_type_t etype = 0; etype < graph->NumEdgeTypes(); ++etype) {
             vec_csr.push_back(graph->GetCSRMatrix(etype));
           }
-          SDDMMCsrHetero<XPU, IdType, bits>(
+          SDDMMCsrHetero<XPU, IdType, Dtype>(
               op, bcast, vec_csr,
               lhs, rhs, out, lhs_target, rhs_target,
               lhs_eid, rhs_eid);
@@ -309,7 +309,7 @@ void SDDMMHetero(const std::string& op,
           for (dgl_type_t etype = 0; etype < graph->NumEdgeTypes(); ++etype) {
             vec_coo.push_back(graph->GetCOOMatrix(etype));
           }
-          SDDMMCooHetero<XPU, IdType, bits>(
+          SDDMMCooHetero<XPU, IdType, Dtype>(
               op, bcast, vec_coo,
               lhs, rhs, out, lhs_target, rhs_target,
               lhs_eid, rhs_eid);
@@ -322,7 +322,7 @@ void SDDMMHetero(const std::string& op,
 }
 
 
-/*! \brief Generalized Edge_softmax op for forward */
+/** @brief Generalized Edge_softmax op for forward */
 void Edge_softmax_forward(const std::string& op,
           HeteroGraphPtr graph,
           NDArray ufeat,
@@ -333,8 +333,8 @@ void Edge_softmax_forward(const std::string& op,
 
   ATEN_XPU_SWITCH(graph->Context().device_type, XPU, "edge_softmax", {
     ATEN_ID_TYPE_SWITCH(graph->DataType(), IdType, {
-      ATEN_FLOAT_BITS_SWITCH(out->dtype, bits, "edge_softmax out data", {
-        Edge_softmax_csr_forward<XPU, IdType, bits>(
+      ATEN_FLOAT_TYPE_SWITCH_16BITS(out->dtype, Dtype, XPU, "edge_softmax out data", {
+        Edge_softmax_csr_forward<XPU, IdType, Dtype>(
           op, bcast, graph->GetCSCMatrix(0), ufeat, efeat, out);
       });
     });
@@ -342,7 +342,7 @@ void Edge_softmax_forward(const std::string& op,
 }
 
 
-/*! \brief Generalized Edge_softmax op for backward */
+/** @brief Generalized Edge_softmax op for backward */
 void Edge_softmax_backward(const std::string& op,
           HeteroGraphPtr graph,
           NDArray out,
@@ -354,8 +354,8 @@ void Edge_softmax_backward(const std::string& op,
 
   ATEN_XPU_SWITCH(graph->Context().device_type, XPU, "edge_softmax_back", {
     ATEN_ID_TYPE_SWITCH(graph->DataType(), IdType, {
-      ATEN_FLOAT_BITS_SWITCH(out->dtype, bits, "edge_softmax out data_back", {
-        Edge_softmax_csr_backward<XPU, IdType, bits>(
+      ATEN_FLOAT_TYPE_SWITCH_16BITS(out->dtype, Dtype, XPU, "edge_softmax out data_back", {
+        Edge_softmax_csr_backward<XPU, IdType, Dtype>(
           op, bcast, graph->GetCSCMatrix(0), out, sds, back_out);
       });
     });
@@ -372,7 +372,7 @@ NDArray GetEdgeMapping(HeteroGraphRef graph) {
   }
 }
 
-/*! \brief Segment reduce dispatch function. */
+/** @brief Segment reduce dispatch function. */
 void SegmentReduceDispatch(const std::string& op,
                            NDArray feat,
                            NDArray offsets,
@@ -380,25 +380,25 @@ void SegmentReduceDispatch(const std::string& op,
                            NDArray arg) {
   ATEN_XPU_SWITCH_CUDA(feat->ctx.device_type, XPU, "SegmentReduce", {
     ATEN_ID_TYPE_SWITCH(offsets->dtype, IdType, {
-      ATEN_FLOAT_BITS_SWITCH(feat->dtype, bits, "Feature data", {
-          SegmentReduce<XPU, IdType, bits>(op, feat, offsets, out, arg);
+      ATEN_FLOAT_TYPE_SWITCH_16BITS(feat->dtype, Dtype, XPU, "Feature data", {
+          SegmentReduce<XPU, IdType, Dtype>(op, feat, offsets, out, arg);
       });
     });
   });
 }
 
-/*! \brief Scatter Add (on first dimension) dispatch function. */
+/** @brief Scatter Add (on first dimension) dispatch function. */
 void ScatterAddDispatch(NDArray feat, NDArray idx, NDArray out) {
   ATEN_XPU_SWITCH_CUDA(feat->ctx.device_type, XPU, "ScatterAdd", {
     ATEN_ID_TYPE_SWITCH(idx->dtype, IdType, {
-      ATEN_FLOAT_BITS_SWITCH(feat->dtype, bits, "Feature data", {
-        ScatterAdd<XPU, IdType, bits>(feat, idx, out);
+      ATEN_FLOAT_TYPE_SWITCH_16BITS(feat->dtype, Dtype, XPU, "Feature data", {
+        ScatterAdd<XPU, IdType, Dtype>(feat, idx, out);
       });
     });
   });
 }
 
-/*! \brief Update gradients (reduce op max/min) dispatch function on heterogeneous graph. */
+/** @brief Update gradients (reduce op max/min) dispatch function on heterogeneous graph. */
 void UpdateGradMinMaxDispatchHetero(const HeteroGraphPtr& graph,
                         const std::string& op,
                         const std::vector<NDArray>& feat,
@@ -409,19 +409,19 @@ void UpdateGradMinMaxDispatchHetero(const HeteroGraphPtr& graph,
   auto src_id = pair.first;
   ATEN_XPU_SWITCH_CUDA(feat[src_id]->ctx.device_type, XPU, "ScatterAdd", {
     ATEN_ID_TYPE_SWITCH(idx[src_id]->dtype, IdType, {
-      ATEN_FLOAT_BITS_SWITCH(feat[src_id]->dtype, bits, "Feature data", {
-        UpdateGradMinMax_hetero<XPU, IdType, bits>(graph, op, feat, idx, idx_etype, out);
+      ATEN_FLOAT_TYPE_SWITCH_16BITS(feat[src_id]->dtype, Dtype, XPU, "Feature data", {
+        UpdateGradMinMax_hetero<XPU, IdType, Dtype>(graph, op, feat, idx, idx_etype, out);
       });
     });
   });
 }
 
-/*! \brief Backward segment cmp dispatch function.*/
+/** @brief Backward segment cmp dispatch function.*/
 void BackwardSegmentCmpDispatch(NDArray feat, NDArray arg, NDArray out) {
   ATEN_XPU_SWITCH_CUDA(feat->ctx.device_type, XPU, "BackwardSegmentCmp", {
     ATEN_ID_TYPE_SWITCH(arg->dtype, IdType, {
-      ATEN_FLOAT_BITS_SWITCH(feat->dtype, bits, "Feature data", {
-        BackwardSegmentCmp<XPU, IdType, bits>(feat, arg, out);
+      ATEN_FLOAT_TYPE_SWITCH_16BITS(feat->dtype, Dtype, XPU, "Feature data", {
+        BackwardSegmentCmp<XPU, IdType, Dtype>(feat, arg, out);
       });
     });
   });
@@ -723,15 +723,15 @@ DGL_REGISTER_GLOBAL("sparse._CAPI_DGLKernelGetEdgeMapping")
     *rv = GetEdgeMapping(graph);
   });
 
-/*!
- * \brief Sparse matrix multiplication with graph interface.
+/**
+ * @brief Sparse matrix multiplication with graph interface.
  *
- * \param A_ref The left operand.
- * \param A_weights The edge weights of graph A.
- * \param B_ref The right operand.
- * \param B_weights The edge weights of graph B.
- * \param num_vtypes The number of vertex types of the graph to be returned.
- * \return A pair consisting of the new graph as well as its edge weights.
+ * @param A_ref The left operand.
+ * @param A_weights The edge weights of graph A.
+ * @param B_ref The right operand.
+ * @param B_weights The edge weights of graph B.
+ * @param num_vtypes The number of vertex types of the graph to be returned.
+ * @return A pair consisting of the new graph as well as its edge weights.
  */
 DGL_REGISTER_GLOBAL("sparse._CAPI_DGLCSRMM")
 .set_body([] (DGLArgs args, DGLRetValue* rv) {

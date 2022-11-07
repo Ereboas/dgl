@@ -1,7 +1,7 @@
-/*!
+/**
  *  Copyright (c) 2021 by Contributors
- * \file runtime/container.h
- * \brief Defines the container object data structures.
+ * @file runtime/container.h
+ * @brief Defines the container object data structures.
  */
 #ifndef DGL_RUNTIME_PARALLEL_FOR_H_
 #define DGL_RUNTIME_PARALLEL_FOR_H_
@@ -24,13 +24,6 @@ int64_t divup(int64_t x, int64_t y) {
 namespace dgl {
 namespace runtime {
 namespace {
-size_t compute_num_threads(size_t begin, size_t end, size_t grain_size) {
-  if (omp_in_parallel() || end - begin <= grain_size || end - begin == 1)
-    return 1;
-
-  return std::min(static_cast<int64_t>(omp_get_max_threads()), divup(end - begin, grain_size));
-}
-
 struct DefaultGrainSizeT {
   size_t grain_size;
 
@@ -50,10 +43,21 @@ struct DefaultGrainSizeT {
 };
 }  // namespace
 
+inline size_t compute_num_threads(size_t begin, size_t end, size_t grain_size) {
+#ifdef _OPENMP
+  if (omp_in_parallel() || end - begin <= grain_size || end - begin == 1)
+    return 1;
+
+  return std::min(static_cast<int64_t>(omp_get_max_threads()), divup(end - begin, grain_size));
+#else
+  return 1;
+#endif
+}
+
 static DefaultGrainSizeT default_grain_size;
 
-/*!
- * \brief OpenMP-based parallel for loop.
+/**
+ * @brief OpenMP-based parallel for loop.
  *
  * It requires each thread's workload to have at least \a grain_size elements.
  * The loop body will be a function that takes in two arguments \a begin and \a end, which
@@ -97,8 +101,8 @@ void parallel_for(
 #endif
 }
 
-/*!
- * \brief OpenMP-based parallel for loop with default grain size.
+/**
+ * @brief OpenMP-based parallel for loop with default grain size.
  *
  * parallel_for with grain size to default value, either 1 or controlled through
  * environment variable DGL_PARALLEL_FOR_GRAIN_SIZE.
@@ -113,8 +117,8 @@ void parallel_for(
   parallel_for(begin, end, default_grain_size(), std::forward<F>(f));
 }
 
-/*!
- * \brief OpenMP-based two-stage parallel reduction.
+/**
+ * @brief OpenMP-based two-stage parallel reduction.
  *
  * The first-stage reduction function \a f works in parallel.  Each thread's workload has
  * at least \a grain_size elements.  The loop body will be a function that takes in

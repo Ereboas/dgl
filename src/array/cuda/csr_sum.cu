@@ -1,7 +1,7 @@
-/*!
+/**
  *  Copyright (c) 2020 by Contributors
- * \file array/cuda/spmm.cu
- * \brief SpGEAM C APIs and definitions.
+ * @file array/cuda/spmm.cu
+ * @brief SpGEAM C APIs and definitions.
  */
 #include <dgl/array.h>
 #include <dgl/runtime/device_api.h>
@@ -16,7 +16,7 @@ using namespace dgl::runtime;
 namespace aten {
 namespace cusparse {
 
-/*! Cusparse implementation of SpSum on Csr format. */
+/** Cusparse implementation of SpSum on Csr format. */
 template <typename DType, typename IdType>
 std::pair<CSRMatrix, NDArray> CusparseCsrgeam2(
     const CSRMatrix& A,
@@ -167,12 +167,16 @@ std::pair<CSRMatrix, NDArray> CSRSum(
   }
 }
 
-#ifdef USE_FP16
 template std::pair<CSRMatrix, NDArray> CSRSum<kDGLCUDA, int32_t, __half>(
     const std::vector<CSRMatrix>&, const std::vector<NDArray>&);
 template std::pair<CSRMatrix, NDArray> CSRSum<kDGLCUDA, int64_t, __half>(
     const std::vector<CSRMatrix>&, const std::vector<NDArray>&);
-#endif
+#if BF16_ENABLED
+template std::pair<CSRMatrix, NDArray> CSRSum<kDGLCUDA, int32_t, __nv_bfloat16>(
+    const std::vector<CSRMatrix>&, const std::vector<NDArray>&);
+template std::pair<CSRMatrix, NDArray> CSRSum<kDGLCUDA, int64_t, __nv_bfloat16>(
+    const std::vector<CSRMatrix>&, const std::vector<NDArray>&);
+#endif  // BF16_ENABLED
 template std::pair<CSRMatrix, NDArray> CSRSum<kDGLCUDA, int32_t, float>(
     const std::vector<CSRMatrix>&, const std::vector<NDArray>&);
 template std::pair<CSRMatrix, NDArray> CSRSum<kDGLCUDA, int64_t, float>(

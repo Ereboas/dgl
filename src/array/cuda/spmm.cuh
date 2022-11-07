@@ -1,7 +1,7 @@
-/*!
+/**
  *  Copyright (c) 2020 by Contributors
- * \file array/cuda/spmm.cuh
- * \brief SPMM CUDA kernel function header.
+ * @file array/cuda/spmm.cuh
+ * @brief SPMM CUDA kernel function header.
  */
 #ifndef DGL_ARRAY_CUDA_SPMM_CUH_
 #define DGL_ARRAY_CUDA_SPMM_CUH_
@@ -10,6 +10,7 @@
 #include <limits>
 #include "macro.cuh"
 #include "fp16.cuh"
+#include "bf16.cuh"
 #include "atomic.cuh"
 #include "../../runtime/cuda/cuda_common.h"
 #include "./utils.h"
@@ -20,9 +21,27 @@ using namespace cuda;
 
 namespace aten {
 
+/**
+ * @brief Determine whether cusparse SpMM function is applicable.
+ */
+template <typename DType, typename IdType>
+inline bool cusparse_available(bool more_nnz_than_matrix_size) {
+#if CUDART_VERSION < 11000
+  if (std::is_same<IdType, int>::value &&
+      (std::is_same<DType, float>::value || std::is_same<DType, double>::value))
+    return true;
+  return false;
+#else
+  if (std::is_same<DType, __half>::value || std::is_same<DType, __nv_bfloat16>::value)
+    return false;  // cusparse's SpMM on fp16 is slow, temporally disabled.
+  // If the CSR matrix has more NNZ than matrix size, we should not use cuSPARSE 11.1.
+  return !more_nnz_than_matrix_size;
+#endif
+}
+
 namespace {
 
-/*! \brief Call cuBLAS geam API for transpose operation for float and double. */
+/** @brief Call cuBLAS geam API for transpose operation for float and double. */
 template <typename DType>
 cublasStatus_t Xgeam(cublasHandle_t handle, cublasOperation_t transa,
     cublasOperation_t transb, int m, int n,
@@ -33,7 +52,6 @@ cublasStatus_t Xgeam(cublasHandle_t handle, cublasOperation_t transa,
   return CUBLAS_STATUS_EXECUTION_FAILED;
 }
 
-#ifdef USE_FP16
 template <>
 cublasStatus_t Xgeam<__half>(cublasHandle_t handle, cublasOperation_t transa,
     cublasOperation_t transb, int m, int n,
@@ -45,7 +63,20 @@ cublasStatus_t Xgeam<__half>(cublasHandle_t handle, cublasOperation_t transa,
   LOG(FATAL) << "Xgeam does not support dtype half (FP16)";
   return CUBLAS_STATUS_EXECUTION_FAILED;
 }
-#endif
+
+#if BF16_ENABLED
+template <>
+cublasStatus_t Xgeam<__nv_bfloat16>(cublasHandle_t handle, cublasOperation_t transa,
+    cublasOperation_t transb, int m, int n,
+    const __nv_bfloat16* alpha, const __nv_bfloat16* A, int lda,
+    const __nv_bfloat16* beta, const __nv_bfloat16* B, int ldb,
+    __nv_bfloat16* C, int ldc) {
+  // TODO(ndickson): There is no cublasHgeam, so a different
+  // implementation would be required.
+  LOG(FATAL) << "Xgeam does not support dtype bfloat16 (BF16)";
+  return CUBLAS_STATUS_EXECUTION_FAILED;
+}
+#endif  // BF16_ENABLED
 
 template <>
 cublasStatus_t Xgeam<float>(cublasHandle_t handle, cublasOperation_t transa,
@@ -67,8 +98,9 @@ cublasStatus_t Xgeam<double>(cublasHandle_t handle, cublasOperation_t transa,
       beta, B, ldb, C, ldc);
 }
 
-/* \brief IndexSelect operator kernel implementation.
- * \note duplicate of IndexSelectKernel defined in array_index_select.cu
+/**
+ * @brief IndexSelect operator kernel implementation.
+ * @note duplicate of IndexSelectKernel defined in array_index_select.cu
  */
 template <typename DType, typename IdType>
 __global__ void _IndexSelectKernel(
@@ -81,8 +113,9 @@ __global__ void _IndexSelectKernel(
     out[i * m + j] = in[idx[i] * m + j];
 }
 
-/* \brief Transpose operator kernel implementation.
- * \note not efficient but it's not a bottleneck, used for float16 dtype.
+/**
+ * @brief Transpose operator kernel implementation.
+ * @note not efficient but it's not a bottleneck, used for float16 dtype.
  */
 template <typename DType>
 __global__ void _TransposeKernel(
@@ -94,10 +127,10 @@ __global__ void _TransposeKernel(
     out[i * m + j] = in[j * n + i];
 }
 
-/*
- * \brief Tranpose the input matrix.
- * \param row number of rows of input matrix.
- * \param col number of columns of input matrix.
+/**
+ * @brief Tranpose the input matrix.
+ * @param row number of rows of input matrix.
+ * @param col number of columns of input matrix.
  */
 template <typename DType>
 void _Transpose(const DType* in, DType* out,
@@ -118,9 +151,9 @@ void _Transpose(const DType* in, DType* out,
       out, row));
 }
 
-/*
- * \brief Tranpose the input matrix for data type half.
- * \note cuBLAS has no geam API for half data type, fallback to our kernel.
+/**
+ * @brief Tranpose the input matrix for data type half.
+ * @note cuBLAS has no geam API for half data type, fallback to our kernel.
  */
 template <>
 void _Transpose<half>(const half* in, half* out,
@@ -131,8 +164,23 @@ void _Transpose<half>(const half* in, half* out,
   CUDA_KERNEL_CALL(_TransposeKernel, nb, nt, 0, stream, in, out, col, row);
 }
 
-/*
- * \brief
+#if BF16_ENABLED
+/**
+ * @brief Tranpose the input matrix for data type half.
+ * @note cuBLAS has no geam API for bf16 data type, fallback to our kernel.
+ */
+template <>
+void _Transpose<__nv_bfloat16>(const __nv_bfloat16* in, __nv_bfloat16* out,
+                               int row, int col) {
+  cudaStream_t stream = runtime::getCurrentCUDAStream();
+  int nt = FindNumThreads(row);
+  int nb = col;
+  CUDA_KERNEL_CALL(_TransposeKernel, nb, nt, 0, stream, in, out, col, row);
+}
+#endif  // BF16_ENABLED
+
+/**
+ * @brief
  */
 template <typename DType, typename IdType>
 __global__ void _IndexSelectKernel(const DType* array, const IdType* index,
@@ -145,8 +193,8 @@ __global__ void _IndexSelectKernel(const DType* array, const IdType* index,
   }
 }
 
-/* \brief IndexSelect operator.
- * \note duplicate of IndexSelect defined in array_op.h but it can
+/* @brief IndexSelect operator.
+ * @note duplicate of IndexSelect defined in array_op.h but it can
  *    not be applied to float16 dtype.
  */
 template<typename DType, typename IdType>
@@ -201,7 +249,7 @@ cusparseStatus_t Xcsrmm2<double>(cusparseHandle_t handle, cusparseOperation_t tr
 }
 #endif
 
-/*! Cusparse implementation of SpMM on Csr format. */
+/** Cusparse implementation of SpMM on Csr format. */
 template <typename DType, typename IdType>
 void CusparseCsrmm2(
     const DGLContext& ctx,
@@ -301,7 +349,7 @@ void CusparseCsrmm2(
     device->FreeWorkspace(ctx, valptr);
 }
 
-/*! Cusparse implementation of SpMM on Csr format. */
+/** Cusparse implementation of SpMM on Csr format. */
 template <typename DType, typename IdType>
 void CusparseCsrmm2Hetero(
     const DGLContext& ctx,
@@ -430,9 +478,9 @@ void CusparseCsrmm2Hetero(
 namespace cuda {
 
 
-/*!
- * \brief CUDA kernel of g-SpMM on Coo format.
- * \note it uses edge parallel strategy, different threadblocks (on y-axis)
+/**
+ * @brief CUDA kernel of g-SpMM on Coo format.
+ * @note it uses edge parallel strategy, different threadblocks (on y-axis)
  *       is responsible for the computation on different edges. Threadblocks
  *       on the x-axis are responsible for the computation on different positions
  *       in feature dimension.
@@ -479,9 +527,9 @@ __global__ void SpMMCooKernel(
   }
 }
 
-/*!
- * \brief CUDA kernel to compute argu and arge in g-SpMM on Coo format.
- * \note it uses edge parallel strategy, different threadblocks (on y-axis)
+/**
+ * @brief CUDA kernel to compute argu and arge in g-SpMM on Coo format.
+ * @note it uses edge parallel strategy, different threadblocks (on y-axis)
  *       is responsible for the computation on different edges. Threadblocks
  *       on the x-axis are responsible for the computation on different positions
  *       in feature dimension.
@@ -527,9 +575,9 @@ __global__ void ArgSpMMCooKernel(
   }
 }
 
-/*!
- * \brief CUDA kernel of g-SpMM on Csr format.
- * \note it uses node parallel strategy, different threadblocks (on y-axis)
+/**
+ * @brief CUDA kernel of g-SpMM on Csr format.
+ * @note it uses node parallel strategy, different threadblocks (on y-axis)
  *       is responsible for the computation on different destination nodes.
  *       Threadblocks on the x-axis are responsible for the computation on
  *       different positions in feature dimension.
@@ -585,9 +633,9 @@ __global__ void SpMMCsrKernel(
   }
 }
 
-/*!
- * \brief CUDA kernel of SpMM-Min/Max on Csr format.
- * \note it uses node parallel strategy, different threadblocks (on y-axis)
+/**
+ * @brief CUDA kernel of SpMM-Min/Max on Csr format.
+ * @note it uses node parallel strategy, different threadblocks (on y-axis)
  *       is responsible for the computation on different destination nodes.
  *       Threadblocks on the x-axis are responsible for the computation on
  *       different positions in feature dimension.
@@ -646,17 +694,17 @@ __global__ void SpMMCmpCsrHeteroKernel(
   }
 }
 
-/*!
- * \brief CUDA implementation of g-SpMM on Coo format.
- * \param bcast Broadcast information.
- * \param coo The Coo matrix.
- * \param ufeat The feature on source nodes.
- * \param efeat The feature on edges.
- * \param out The result feature on destination nodes.
- * \param argu Arg-Min/Max on source nodes, which refers the source node indices
+/**
+ * @brief CUDA implementation of g-SpMM on Coo format.
+ * @param bcast Broadcast information.
+ * @param coo The Coo matrix.
+ * @param ufeat The feature on source nodes.
+ * @param efeat The feature on edges.
+ * @param out The result feature on destination nodes.
+ * @param argu Arg-Min/Max on source nodes, which refers the source node indices
  *        correspond to the minimum/maximum values of reduction result on
  *        destination nodes. It's useful in computing gradients of Min/Max reducer.
- * \param arge Arg-Min/Max on edges. which refers the source node indices
+ * @param arge Arg-Min/Max on edges. which refers the source node indices
  *        correspond to the minimum/maximum values of reduction result on
  *        destination nodes. It's useful in computing gradients of Min/Max reducer.
  */
@@ -723,17 +771,17 @@ void SpMMCoo(
   });
 }
 
-/*!
- * \brief CUDA implementation of g-SpMM on Csr format.
- * \param bcast Broadcast information.
- * \param csr The Csr matrix.
- * \param ufeat The feature on source nodes.
- * \param efeat The feature on edges.
- * \param out The result feature on destination nodes.
- * \param argu Arg-Min/Max on source nodes, which refers the source node indices
+/**
+ * @brief CUDA implementation of g-SpMM on Csr format.
+ * @param bcast Broadcast information.
+ * @param csr The Csr matrix.
+ * @param ufeat The feature on source nodes.
+ * @param efeat The feature on edges.
+ * @param out The result feature on destination nodes.
+ * @param argu Arg-Min/Max on source nodes, which refers the source node indices
  *        correspond to the minimum/maximum values of reduction result on
  *        destination nodes. It's useful in computing gradients of Min/Max reducer.
- * \param arge Arg-Min/Max on edges. which refers the source node indices
+ * @param arge Arg-Min/Max on edges. which refers the source node indices
  *        correspond to the minimum/maximum values of reduction result on
  *        destination nodes. It's useful in computing gradients of Min/Max reducer.
  */
@@ -778,27 +826,27 @@ void SpMMCsr(
   });
 }
 
-/*!
- * \brief CUDA kernel of SpMM-Min/Max on Csr format on heterogeneous graph.
- * \param bcast Broadcast information.
- * \param csr The Csr matrix.
- * \param ufeat The feature on source nodes.
- * \param efeat The feature on edges.
- * \param out The result feature on destination nodes.
- * \param argu Arg-Min/Max on source nodes, which refers the source node indices
+/**
+ * @brief CUDA kernel of SpMM-Min/Max on Csr format on heterogeneous graph.
+ * @param bcast Broadcast information.
+ * @param csr The Csr matrix.
+ * @param ufeat The feature on source nodes.
+ * @param efeat The feature on edges.
+ * @param out The result feature on destination nodes.
+ * @param argu Arg-Min/Max on source nodes, which refers the source node indices
  *        correspond to the minimum/maximum values of reduction result on
  *        destination nodes. It's useful in computing gradients of Min/Max reducer.
- * \param arge Arg-Min/Max on edges. which refers the source node indices
+ * @param arge Arg-Min/Max on edges. which refers the source node indices
  *        correspond to the minimum/maximum values of reduction result on
  *        destination nodes. It's useful in computing gradients of Min/Max reducer.
- * \param argu_ntype Node type of the arg-Min/Max on source nodes, which refers the
+ * @param argu_ntype Node type of the arg-Min/Max on source nodes, which refers the
  *        source node types correspond to the minimum/maximum values of reduction result
  *        on destination nodes. It's useful in computing gradients of Min/Max reducer.
- * \param arge_etype Edge-type of the arg-Min/Max on edges. which refers the source
+ * @param arge_etype Edge-type of the arg-Min/Max on edges. which refers the source
  *        node indices correspond to the minimum/maximum values of reduction result on
  *        destination nodes. It's useful in computing gradients of Min/Max reducer.
- * \param src_type Node type of the source nodes of an etype
- * \param etype Edge type
+ * @param src_type Node type of the source nodes of an etype
+ * @param etype Edge type
  */
 template <typename Idx, typename DType,
           typename BinaryOp, typename ReduceOp>

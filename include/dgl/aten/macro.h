@@ -1,7 +1,7 @@
-/*!
+/**
  *  Copyright (c) 2020 by Contributors
- * \file dgl/aten/macro.h
- * \brief Common macros for aten package.
+ * @file dgl/aten/macro.h
+ * @brief Common macros for aten package.
  */
 
 #ifndef DGL_ATEN_MACRO_H_
@@ -9,7 +9,7 @@
 
 ///////////////////////// Dispatchers //////////////////////////
 
-/*
+/**
  * Dispatch according to device:
  *
  * ATEN_XPU_SWITCH(array->ctx.device_type, XPU, {
@@ -28,7 +28,7 @@
   }                                                             \
 } while (0)
 
-/*
+/**
  * Dispatch according to device:
  *
  * XXX(minjie): temporary macro that allows CUDA operator
@@ -59,7 +59,7 @@
 #define ATEN_XPU_SWITCH_CUDA ATEN_XPU_SWITCH
 #endif  // DGL_USE_CUDA
 
-/*
+/**
  * Dispatch according to integral type (either int32 or int64):
  *
  * ATEN_ID_TYPE_SWITCH(array->dtype, IdType, {
@@ -81,7 +81,7 @@
   }                                                           \
 } while (0)
 
-/*
+/**
  * Dispatch according to bits (either int32 or int64):
  *
  * ATEN_ID_BITS_SWITCH(bits, IdType, {
@@ -104,7 +104,7 @@
     }                                                           \
   } while (0)
 
-/*
+/**
  * Dispatch according to float type (either float32 or float64):
  *
  * ATEN_FLOAT_TYPE_SWITCH(array->dtype, FloatType, {
@@ -123,28 +123,69 @@
     typedef double FloatType;                                 \
     {__VA_ARGS__}                                             \
   } else {                                                    \
-    LOG(FATAL) << (val_name) << " can only be float32 or float64";  \
+    LOG(FATAL) << (val_name)                                  \
+      << " can only be float32 or float64";                   \
   }                                                           \
 } while (0)
 
-#define ATEN_FLOAT_BITS_SWITCH(val, bits, val_name, ...) do {  \
-  CHECK_EQ((val).code, kDGLFloat)                              \
-    << (val_name) << " must be float type";                   \
-  if ((val).bits == 16) {                                     \
-    constexpr int bits = 16;                                  \
-    {__VA_ARGS__}                                             \
-  } else if ((val).bits == 32) {                              \
-    constexpr int bits = 32;                                  \
-    {__VA_ARGS__}                                             \
-  } else if ((val).bits == 64) {                              \
-    constexpr int bits = 64;                                  \
-    {__VA_ARGS__}                                             \
-  } else {                                                    \
-    LOG(FATAL) << (val_name) << " can only be float32 or float64";  \
-  }                                                           \
+/**
+ * Dispatch according to float type, including 16bits (float16/bfloat16/float32/float64).
+ */
+#ifdef DGL_USE_CUDA
+#if BF16_ENABLED
+#define ATEN_FLOAT_TYPE_SWITCH_16BITS(val, FloatType, XPU, val_name, ...) do {  \
+  CHECK((val).code == kDGLFloat || (val.code == kDGLBfloat))        \
+    << (val_name) << " must be float type";                         \
+  if ((val).bits == 32) {                                           \
+    typedef float FloatType;                                        \
+    {__VA_ARGS__}                                                   \
+  } else if ((val).bits == 64) {                                    \
+    typedef double FloatType;                                       \
+    {__VA_ARGS__}                                                   \
+  } else if (XPU == kDGLCUDA && (val).bits == 16 && (val).code == kDGLFloat) {  \
+    typedef __half FloatType;                                       \
+    {__VA_ARGS__}                                                   \
+  } else if (XPU == kDGLCUDA && (val).bits == 16 && (val).code == kDGLBfloat) {  \
+    typedef __nv_bfloat16 FloatType;                                \
+    {__VA_ARGS__}                                                   \
+  } else if (XPU == kDGLCPU) {                                      \
+    LOG(FATAL) << (val_name)                                        \
+      << " can only be float32 or float64 on CPU";                  \
+  } else {                                                          \
+    LOG(FATAL) << (val_name)                                        \
+      << " can only be float16/bfloat16/float32/float64 on GPU";    \
+  }                                                                 \
 } while (0)
+#else  // BF16_ENABLED
+#define ATEN_FLOAT_TYPE_SWITCH_16BITS(val, FloatType, XPU, val_name, ...) do {  \
+  CHECK((val).code == kDGLFloat || (val.code == kDGLBfloat))        \
+    << (val_name) << " must be float type";                         \
+  if ((val).bits == 32) {                                           \
+    typedef float FloatType;                                        \
+    {__VA_ARGS__}                                                   \
+  } else if ((val).bits == 64) {                                    \
+    typedef double FloatType;                                       \
+    {__VA_ARGS__}                                                   \
+  } else if (XPU == kDGLCUDA && (val).bits == 16 && (val).code == kDGLFloat) {  \
+    typedef __half FloatType;                                       \
+    {__VA_ARGS__}                                                   \
+  } else if (XPU == kDGLCUDA && (val).bits == 16 && (val).code == kDGLBfloat) {  \
+    LOG(FATAL) << "bfloat16 requires CUDA >= 11.0";                 \
+  } else if (XPU == kDGLCPU) {                                      \
+    LOG(FATAL) << (val_name)                                        \
+      << " can only be float32 or float64 on CPU";                  \
+  } else {                                                          \
+    LOG(FATAL) << (val_name)                                        \
+      << " can only be float16/float32/float64 on GPU";             \
+  }                                                                 \
+} while (0)
+#endif  // BF16_ENABLED
+#else  // DGL_USE_CUDA
+#define ATEN_FLOAT_TYPE_SWITCH_16BITS(val, FloatType, XPU, val_name, ...)  \
+  ATEN_FLOAT_TYPE_SWITCH(val, FloatType, val_name, {__VA_ARGS__})
+#endif  // DGL_USE_CUDA
 
-/*
+/**
  * Dispatch according to data type (int32, int64, float32 or float64):
  *
  * ATEN_DTYPE_SWITCH(array->dtype, DType, {
@@ -171,7 +212,34 @@
   }                                                           \
 } while (0)
 
-/*
+/**
+ * Dispatch according to data type (int8, uint8, float32 or float64):
+ *
+ * ATEN_FLOAT_INT8_UINT8_TYPE_SWITCH(array->dtype, DType, {
+ *   // Now DType is the type corresponding to data type in array.
+ *   // For instance, one can do this for a CPU array:
+ *   DType *data = static_cast<DType *>(array->data);
+ * });
+ */
+#define ATEN_FLOAT_INT8_UINT8_TYPE_SWITCH(val, DType, val_name, ...) do {     \
+  if ((val).code == kDGLInt && (val).bits == 8) {              \
+    typedef int8_t DType;                                     \
+    {__VA_ARGS__}                                             \
+  } else if ((val).code == kDGLUInt && (val).bits == 8) {      \
+    typedef uint8_t DType;                                    \
+    {__VA_ARGS__}                                             \
+  } else if ((val).code == kDGLFloat && (val).bits == 32) {    \
+    typedef float DType;                                      \
+    {__VA_ARGS__}                                             \
+  } else if ((val).code == kDGLFloat && (val).bits == 64) {    \
+    typedef double DType;                                     \
+    {__VA_ARGS__}                                             \
+  } else {                                                    \
+    LOG(FATAL) << (val_name) << " can only be int8, uint8, float32 or float64"; \
+  }                                                           \
+} while (0)
+
+/**
  * Dispatch data type only based on bit-width (8-bit, 16-bit, 32-bit, 64-bit):
  *
  * ATEN_DTYPE_BITS_ONLY_SWITCH(array->dtype, DType, {
@@ -200,7 +268,7 @@
   }                                                                       \
 } while (0)
 
-/*
+/**
  * Dispatch according to integral type of CSR graphs.
  * Identical to ATEN_ID_TYPE_SWITCH except for a different error message.
  */
@@ -238,7 +306,7 @@
     << "context as " << (#VAR1) << "(" << (VAR1)->ctx << "). "                            \
     << "Or " << (#VAR1) << "(" << (VAR1)->ctx << ")" << " is pinned";
 
-/*
+/**
  * Macro to dispatch according to the context of array and dtype of csr
  * to enable CUDA UVA ops.
  * Context check is covered here to avoid confusion with CHECK_SAME_CONTEXT.

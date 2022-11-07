@@ -1,15 +1,27 @@
-/*!
- *  Copyright (c) 2020 by Contributors
- * \file array/cuda/fp16.cuh
- * \brief float16 related functions.
- * \note this file is modified from TVM project:
+/**
+ *  Copyright (c) 2020-2022 by Contributors
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file array/cuda/fp16.cuh
+ * @brief float16 related functions.
+ * @note this file is modified from TVM project:
  *       https://github.com/apache/tvm/blob/e561007f0c330e3d14c2bc8a3ef40fb741db9004/src/target/source/literal/cuda_half_t.h.
  */
 #ifndef DGL_ARRAY_CUDA_FP16_CUH_
 #define DGL_ARRAY_CUDA_FP16_CUH_
 
 
-#ifdef USE_FP16
 #include <cuda_fp16.h>
 #include <algorithm>
 
@@ -96,7 +108,5 @@ __device__ __forceinline__ bool operator<=(const __half& lh, const __half& rh) {
 }
 #endif  // __CUDA_ARCH__ < 530
 #endif  // __CUDACC__
-
-#endif  // USE_FP16
 
 #endif  // DGL_ARRAY_CUDA_FP16_CUH_

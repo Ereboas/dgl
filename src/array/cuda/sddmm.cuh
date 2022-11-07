@@ -1,7 +1,7 @@
-/*!
+/**
  *  Copyright (c) 2020 by Contributors
- * \file array/cuda/sddmm.cuh
- * \brief SDDMM CUDA kernel function header.
+ * @file array/cuda/sddmm.cuh
+ * @brief SDDMM CUDA kernel function header.
  */
 #ifndef DGL_ARRAY_CUDA_SDDMM_CUH_
 #define DGL_ARRAY_CUDA_SDDMM_CUH_
@@ -11,6 +11,7 @@
 #include "atomic.cuh"
 #include "functor.cuh"
 #include "fp16.cuh"
+#include "bf16.cuh"
 #include "./utils.h"
 #include "./functor.cuh"
 #include "../selector.h"
@@ -85,9 +86,9 @@ namespace cuda {
 
 constexpr unsigned int full_mask = 0xffffffff;
 
-/*!
- * \brief CUDA kernel of g-SDDMM on Coo format.
- * \note it uses edge parallel strategy, different threadblocks (on y-axis)
+/**
+ * @brief CUDA kernel of g-SDDMM on Coo format.
+ * @note it uses edge parallel strategy, different threadblocks (on y-axis)
  *       is responsible for the computation on different edges. Threadblocks
  *       on the x-axis are responsible for the computation on different positions
  *       in feature dimension.
@@ -134,9 +135,9 @@ __global__ void SDDMMCooKernel(
   }
 }
 
-/*!
- * \brief CUDA kernel of SDDMM-dot on Coo format, accelerated with tree reduction.
- * \note it uses edge parallel strategy, different threadblocks (on y-axis)
+/**
+ * @brief CUDA kernel of SDDMM-dot on Coo format, accelerated with tree reduction.
+ * @note it uses edge parallel strategy, different threadblocks (on y-axis)
  *       is responsible for the computation on different edges. Threadblocks
  *       on the x-axis are responsible for the computation on different positions
  *       in feature dimension.
@@ -202,9 +203,9 @@ __device__ __forceinline__ Idx BinarySearchSrc(const Idx *array, Idx length, Idx
   }
 }
 
-/*!
- * \brief CUDA kernel of g-SDDMM on Csr format.
- * \note it uses edge parallel strategy, different threadblocks (on y-axis)
+/**
+ * @brief CUDA kernel of g-SDDMM on Csr format.
+ * @note it uses edge parallel strategy, different threadblocks (on y-axis)
  *       is responsible for the computation on different edges. Threadblocks
  *       on the x-axis are responsible for the computation on different positions
  *       in feature dimension.
@@ -253,13 +254,13 @@ __global__ void SDDMMCsrKernel(
   }
 }
 
-/*!
- * \brief CUDA implementation of g-SDDMM on Coo format.
- * \param bcast Broadcast information.
- * \param coo The Coo matrix.
- * \param lhs The left hand side operand feature.
- * \param rhs The right hand size operand feature.
- * \param out The result feature on edges.
+/**
+ * @brief CUDA implementation of g-SDDMM on Coo format.
+ * @param bcast Broadcast information.
+ * @param coo The Coo matrix.
+ * @param lhs The left hand side operand feature.
+ * @param rhs The right hand size operand feature.
+ * @param out The result feature on edges.
  */
 template <typename Idx, typename DType, typename Op,
           int LhsTarget = 0, int RhsTarget = 2>
@@ -322,13 +323,13 @@ void SDDMMCoo(
   }
 }
 
-/*!
- * \brief CUDA implementation of g-SDDMM on Csr format.
- * \param bcast Broadcast information.
- * \param csr The Csr matrix.
- * \param lhs The left hand side operand feature.
- * \param rhs The right hand size operand feature.
- * \param out The result feature on edges.
+/**
+ * @brief CUDA implementation of g-SDDMM on Csr format.
+ * @param bcast Broadcast information.
+ * @param csr The Csr matrix.
+ * @param lhs The left hand side operand feature.
+ * @param rhs The right hand size operand feature.
+ * @param out The result feature on edges.
  */
 template <typename Idx, typename DType, typename Op,
           int LhsTarget = 0, int RhsTarget = 2>
