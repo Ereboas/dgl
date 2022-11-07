@@ -150,6 +150,8 @@ class SAGEConv(nn.Module):
         if self._aggre_type != 'gcn':
             nn.init.xavier_uniform_(self.fc_self.weight, gain=gain)
         nn.init.xavier_uniform_(self.fc_neigh.weight, gain=gain)
+        if self.bias is not None:
+            nn.init.zeros_(self.bias)
 
     def _compatibility_check(self):
         """Address the backward compatibility issue brought by #2747"""
